@@ -43,14 +43,14 @@ pd.set_option("display.width", 200)
 pd.set_option("display.max_columns", 30)
 
 
-def parallel_map(func, jobs):
+def parallel_map(func, jobs, processes=None):
     """Run func(*job) for every job; fork workers when the platform allows it, same results either way."""
     jobs = list(jobs)
     try:
         ctx = mp.get_context("fork")
     except ValueError:
         return [func(*job) for job in jobs]
-    with ctx.Pool() as pool:
+    with ctx.Pool(processes) as pool:
         return pool.starmap(func, jobs, chunksize=1)
 
 
