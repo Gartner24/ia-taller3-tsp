@@ -14,6 +14,7 @@
 | G | Protocolo, calibración, escalas A y B, tablas, gráficas y animación | 11.1, 14, 15 |
 | H | Las 12 preguntas, conclusiones, referencias y bitácora | 16 |
 #%% code
+import collections
 import heapq
 import itertools
 import math
