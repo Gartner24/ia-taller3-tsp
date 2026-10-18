@@ -133,7 +133,7 @@ display(sub_df.pivot_table(index="algorithm", columns="k", values="gap_percent",
 **Lo que encontramos (G.3):**
 
 - **A\* certifica los 16 subproblemas** y coincide con el oráculo independiente y con el otro origen. RBFS termina 14 y en brazil58 con $k = 10$ y $k = 12$ se corta en las 100 000 expansiones: en la tabla queda como interrumpido, sin costo.
-- **Memoria contra recomputación (pregunta 5).** En $k = 12$, A\* guarda hasta 1296 a 4204 nodos en la frontera y usa entre 0.05 y 2.35 MiB adicionales. RBFS nunca pasa de 68 registros vivos ni de 0.02 MiB, o sea, entre 3 y 130 veces menos memoria. El precio son las regeneraciones: en berlin52 $k = 12$, de 80 651 expansiones, 80 214 son estados que ya había expandido antes (99.5 %), y tarda 17 s contra 0.08 s de A\*. Los registros vivos crecen como $k^2/2$ (17, 30, 47, 68 contra 18, 32, 50, 72), que es el $O(bd)$ de la teoría con un factor de ramificación $b$ y una profundidad $d$ que crecen los dos con $k$.
+- **Memoria contra recomputación (pregunta 5).** En $k = 12$, A\* guarda hasta 1296 a 4204 nodos en la frontera y usa entre 0.05 y 2.35 MiB adicionales. RBFS nunca pasa de 68 registros vivos ni de 0.02 MiB, o sea, entre 3 y 130 veces menos memoria. El precio son las regeneraciones: en berlin52 $k = 12$, de 80 651 expansiones, 80 214 son estados que ya había expandido antes (99.5 %), y tarda unos 18 s contra 0.09 s de A\*. Los registros vivos crecen como $k^2/2$ (17, 30, 47, 68 contra 18, 32, 50, 72), que es el $O(bd)$ de la teoría con un factor de ramificación $b$ y una profundidad $d$ que crecen los dos con $k$.
 - **gr48 es mucho más fácil que att48 para los exactos (pregunta 6),** aunque las dos tienen 48 ciudades: en $k = 12$, A\* hace 38 expansiones en gr48 y 376 en att48, y RBFS 79 contra 32 375. La cota MST se ajusta mejor al costo real en los primeros 12 nodos de gr48.
 - **Métodos locales:** SA y HC con reinicios llegan al óptimo del subproblema en las 160 corridas. HC de una ruta falla sobre todo en brazil58 con $k = 10$ y $k = 12$ (2 de 10 aciertos) y una vez en att48 con $k = 10$: se queda en un óptimo local hasta 5.4 % peor. GA llega en 157 de 160, con gap máximo de 0.19 %. Con $k \le 12$, 30 000 evaluaciones sobran para todos, así que estas tablas sirven para comprobar que los métodos son correctos, no para ordenarlos.
 #%% md
@@ -209,11 +209,11 @@ for name in MANDATORY:
 #%% md
 **Lo que encontramos (G.4):**
 
-- **Exactos en las instancias completas.** Los 8 ensayos diagnósticos se cortan por los 30 s, sin ruta (`NO_TOUR`, censurados). A\* llega a 1165-1964 expansiones y 17-24 MiB; RBFS a 808-1346 expansiones con unos 0.1 MiB, y nunca pasa de la profundidad 8 de las 48 que necesita una ruta. No es un error: la sección 17 avisa que no se penaliza, y el diagnóstico muestra por qué (cada expansión calcula decenas de MST de unas 45 ciudades).
+- **Exactos en las instancias completas.** Los 8 ensayos diagnósticos se cortan por los 30 s, sin ruta (`NO_TOUR`, censurados). A\* llega a unas 1200-2000 expansiones y 17-25 MiB; RBFS a unas 800-1300 expansiones con unos 0.1 MiB, y nunca pasa de la profundidad 8 de las 48 que necesita una ruta. No es un error: la sección 17 avisa que no se penaliza, y el diagnóstico muestra por qué (cada expansión calcula decenas de MST de unas 45 ciudades).
 - **Con 30 000 evaluaciones, HC de una ruta y HC con reinicios dan exactamente lo mismo,** porque ninguna corrida llega a su primer óptimo local y por lo tanto nunca reinicia. Su gap mediano es de 25 % a 81 %: es una ruta a mitad de descenso. Esto confirma la razón del cambio de presupuesto de G.1.
 - **Con 200 000 evaluaciones,** HC de una ruta para siempre en un óptimo local (gap mediano 4.5 % a 8.1 %). HC con reinicios usa todo el presupuesto y baja la mediana a 1.7-5.7 %. SA es el mejor en las cuatro instancias (gap mediano 0.3 % a 2.9 %) y la única que llega al óptimo oficial: 2 semillas en berlin52, 3 en brazil58 y 1 en gr48. GA queda cerca de HC de una ruta en mediana (3.6 % a 5.5 %), con una dispersión parecida o mayor.
-- **Tiempo.** HC termina en menos de 1 s, SA en 2-4 s y GA en 17-43 s. Los tiempos del GA varían mucho entre instancias porque las corridas compartían la máquina (G.1). Ninguna se cortó por tiempo.
-- **Memoria.** Los métodos locales usan a lo sumo 1.1 MiB adicionales (el GA, que guarda 80 rutas y su registro por generación). A\* llega a 24 MiB en los diagnósticos.
+- **Tiempo.** HC de una ruta termina en unas centésimas de segundo, HC con reinicios en 0.1-0.25 s, SA en unos 1.5 s y GA en 17-19 s. Son tiempos con 8 corridas en paralelo y con `tracemalloc` encendido (G.1, G.7): en otra ejecución de prueba salieron hasta el doble, así que solo vale el orden de magnitud. Ninguna se cortó por tiempo.
+- **Memoria.** Los métodos locales usan a lo sumo 1.1 MiB adicionales (el GA, que guarda 80 rutas y su registro por generación). A\* llega a unos 25 MiB en los diagnósticos.
 #%% md
 ### G.5 Comparación controlada HC contra SA (sección 11.1)
 
@@ -251,7 +251,7 @@ display(pd.DataFrame([{"p0": p0, "T0 mediana": round(statistics.median(r.extra["
 - **¿SA mejora siempre a HC?** No siempre. Contra HC de una ruta gana en 39 de 40 pares con el presupuesto principal; la excepción es una semilla de gr48. Contra HC con reinicios gana en 35 de 40: pierde en 2 semillas de att48 y en 3 de gr48, y en gr48 la diferencia mediana es de solo 38 unidades (0.75 %). Con 30 000 evaluaciones SA gana los 40 pares contra los dos, pero esa comparación favorece a SA por construcción: SA se enfría dentro del presupuesto y HC no alcanza a terminar ni su primer descenso.
 - **¿Temperatura inicial demasiado baja?** Con $p_0 = 0.01$, $T_0$ baja de unos 1020 a unos 50 y en el primer nivel se acepta el 3.8 % de los empeoramientos en lugar del 73 %. SA se vuelve casi un descenso: el gap mediano en berlin52 sube de 2.87 % a 3.24 % y el peor caso de 4.55 % a 8.35 %. Lo que más empeora es la cola: algunas semillas quedan atrapadas como HC.
 - **¿Cómo afecta el enfriamiento a la aceptación?** La aceptación de empeoramientos cae con la temperatura, de cerca de $p_0$ al principio a casi 0 al final (figura 5).
-- **¿Una mejora final compensa el trabajo adicional?** Depende de lo que se pague. SA tarda unas 10 veces más que HC con reinicios (3.9 s contra 0.4 s en att48) por 0.8 a 3.3 puntos de gap mediano. En G.7 se ve que buena parte de ese tiempo extra es la medición de memoria, así que la respuesta cambia según se mida por evaluaciones o por tiempo (pregunta 9).
+- **¿Una mejora final compensa el trabajo adicional?** Depende de lo que se pague. SA tarda unas 10 veces más que HC con reinicios (1.44 s contra 0.14 s en att48) por 0.8 a 3.3 puntos de gap mediano. En G.7 se ve que buena parte de ese tiempo extra es la medición de memoria, así que la respuesta cambia según se mida por evaluaciones o por tiempo (pregunta 9).
 #%% md
 ### G.6 Visualizaciones obligatorias (sección 15.2)
 
@@ -404,6 +404,16 @@ plt.show()
 print(f"{ga_demo.extra['generations']} generaciones; aristas distintas / n: {gl['edge_diversity'].iloc[0]:.1f} al inicio, "
       f"{gl['edge_diversity'].iloc[-1]:.2f} al final")
 #%% md
+**Lo que encontramos (G.6):**
+
+- **Figura 1.** Las mejores rutas finales de att48 y berlin52 no tienen cruces y se ven como un recorrido "razonable" por el mapa; las cuatro mejores son de SA, y en berlin52, brazil58 y gr48 tienen exactamente el costo óptimo. En brazil58 y gr48 el dibujo circular se ve igual de enredado al inicio que al final: sin coordenadas, el dibujo no dice nada de la calidad, y por eso ahí miramos solo el costo.
+- **Figura 2, por evaluaciones.** Cada método tiene su propia forma. El GA es el que baja más rápido al principio: hasta unas 40 000 evaluaciones va primero. HC baja casi igual de rápido y luego se detiene en su óptimo local (la línea pasa a punteada desde que para la primera semilla). SA pasa sus primeras 80 000 evaluaciones "caliente", casi sin mejorar; entre 80 000 y 120 000 baja de golpe y termina por debajo de todos. Esto explica por qué el presupuesto cambia el orden: con poco presupuesto el GA gana a SA, y con 200 000 pasa lo contrario.
+- **Figura 2, por tiempo.** El orden cambia otra vez. HC y HC con reinicios terminan en menos de 0.3 s; en ese tiempo SA ni siquiera empezó a enfriarse. SA termina hacia 1.5 s y el GA necesita varios segundos para llegar a su nivel final. Si se cortara todo a los 0.2 s, el mejor sería HC con reinicios (pregunta 9).
+- **Figura 3.** Con 30 000 evaluaciones las cajas de HC y HC con reinicios son idénticas (nunca reinician) y están muy arriba. Con 200 000 la caja de SA es la más baja y la más estrecha en las cuatro instancias; en gr48 la de HC con reinicios queda cerca. Las cajas más anchas son las de HC de una ruta y del GA: en berlin52 y brazil58 las peores semillas del GA pasan del 10 %.
+- **Figura 4.** El tiempo de RBFS crece mucho más rápido que el de A\*: en brazil58 ya en $k=8$ tarda más de 3 s, y las cruces marcan los cortes en $k=10$ y $k=12$. La memoria es al revés: la de RBFS es una recta baja y casi igual en las cuatro instancias, y la de A\* sube con $k$ y depende mucho de la instancia.
+- **Figura 5.** La temperatura baja en línea recta en escala logarítmica, como corresponde a $T \leftarrow \alpha T$. La aceptación de empeoramientos empieza cerca de 0.73 (calibrada para 0.8) y llega a casi 0 hacia las 100 000 evaluaciones. Mientras está caliente, la ruta actual sube y baja muy por encima de la mejor; cuando la aceptación cae, las dos se juntan y desde ahí SA es un descenso que termina en el óptimo, 7542.
+- **Figura 6.** El GA llega a su mejor costo hacia la generación 550 y en las casi 2000 generaciones siguientes no mejora nada: más de las tres cuartas partes del presupuesto se gastan sin efecto. Desde la generación 300 la mediana de la población es igual al mejor, la fracción de rutas únicas oscila alrededor de 0.3 y las aristas distintas quedan cerca del 10 % de las iniciales. Es la convergencia prematura de la pregunta 8: la población es casi una sola ruta con pequeñas variantes.
+#%% md
 ### G.7 Cómo medimos la memoria y cuánto cuesta medirla (secciones 4 y 14.1)
 
 - **Sobrecosto de `tracemalloc`.** Corremos lo mismo con la medición encendida y apagada (con apagada, `Meter` solo mide el tiempo), tres veces cada una, y comparamos la mediana. Esta celda corre sola, sin otros procesos en paralelo.
@@ -453,8 +463,8 @@ display(pd.Series({
 #%% md
 **Lo que encontramos (G.7):**
 
-- **Medir la memoria cuesta mucho tiempo y no afecta a todos por igual.** Con `tracemalloc` encendido, HC tarda 1.3 veces más, pero SA 7.5 veces, RBFS 4.5, GA 3.9 y A\* 3.1. `tracemalloc` cobra por cada objeto que se crea, y SA crea una lista nueva cada vez que acepta un movimiento, mientras que HC casi solo calcula deltas. Por eso **los tiempos absolutos de las tablas están inflados**, y la diferencia de tiempo entre SA y HC es en parte un efecto de la medición. Para comparar tiempos entre familias hay que tenerlo presente; los costos y las evaluaciones no cambian.
-- **Memoria del proceso contra memoria del solver.** El proceso de Jupyter llega a unos 456 MiB de RSS, y cada proceso de trabajo a unos 420 MiB (heredan el intérprete y las bibliotecas). El solver que más memoria adicional usó, A\* en un diagnóstico, apenas pasa de 23 MiB. Casi toda la memoria del proceso es el entorno, no el algoritmo. Por eso reportamos la memoria adicional del solver y decimos que solo cubre las asignaciones de Python.
+- **Medir la memoria cuesta mucho tiempo y no afecta a todos por igual.** Con `tracemalloc` encendido, HC casi no cambia (factor cercano a 1), pero SA tarda unas 9 veces más, y RBFS, GA y A\* unas 4 veces más. `tracemalloc` cobra por cada objeto que se crea, y SA crea una lista nueva cada vez que acepta un movimiento, mientras que HC casi solo calcula deltas. Por eso **los tiempos absolutos de las tablas están inflados**, y la diferencia de tiempo entre SA y HC es en parte un efecto de la medición. Para comparar tiempos entre familias hay que tenerlo presente; los costos y las evaluaciones no cambian.
+- **Memoria del proceso contra memoria del solver.** El proceso de Jupyter llega a unos 490 MiB de RSS, y el mayor proceso de trabajo a unos 450 MiB (heredan el intérprete y las bibliotecas). El solver que más memoria adicional usó, A\* en un diagnóstico, apenas pasa de 24 MiB. Casi toda la memoria del proceso es el entorno, no el algoritmo. Por eso reportamos la memoria adicional del solver y decimos que solo cubre las asignaciones de Python.
 #%% md
 ### G.8 Animación didáctica: HC mejorando una ruta de berlin52
 
@@ -480,3 +490,5 @@ animation.FuncAnimation(fig, draw_frame, frames=len(frames)).save(gif_path, writ
 plt.close(fig)
 print(f"{len(frames)} cuadros -> {gif_path}")
 display(Image(filename=str(gif_path)))
+#%% md
+**Lo que encontramos (G.8):** la animación tiene 47 cuadros: la ruta inicial y las 46 mejoras de HC hasta su óptimo local. Las primeras mejoras quitan cruces largos que atraviesan todo el mapa y bajan mucho el costo: con solo 3 mejoras pasa de 30 191 a 24 865. Las últimas reacomodan tramos cortos y ganan poco: las 16 últimas bajan de 9628 a 8113. Al final la ruta no tiene cruces, pero su gap sigue siendo de 7.6 % (es la misma corrida de HC de la semilla 0 de G.4): sin cruces no quiere decir óptima (E.2).

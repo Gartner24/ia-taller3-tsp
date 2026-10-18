@@ -39,12 +39,12 @@ def split_section_18(cell):
     """Split the teacher's section-18 cell at its '### X.' headings without changing any text."""
     text = "".join(cell["source"])
     pieces = re.split(r"(?=^### [A-H]\. )", text, flags=re.M)
+    assert "".join(pieces) == text
     out = []
     for piece in pieces:
         c = copy.deepcopy(cell)
         c["source"] = piece.rstrip("\n")
         out.append(c)
-    assert "".join(p["source"] + "\n" for p in out).rstrip("\n") == text.rstrip("\n")
     return out
 
 
@@ -71,7 +71,8 @@ def main():
                                     "language": "python"}
     nb["nbformat"], nb["nbformat_minor"] = 4, 4
     OUT.write_text(json.dumps(nb, ensure_ascii=False, indent=1))
-    code = [c["source"] for c in cells if c["cell_type"] == "code" and not c["source"].startswith("!")]
+    sources = ["".join(c["source"]) for c in cells if c["cell_type"] == "code"]
+    code = [s for s in sources if not s.startswith("!")]
     (HERE / "all_code.py").write_text("\n\n".join(code) + "\n")
     print(f"{len(cells)} cells -> {OUT.name}")
 
