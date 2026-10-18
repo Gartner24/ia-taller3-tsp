@@ -8,7 +8,7 @@ HERE = Path(__file__).parent
 os.chdir("/home/santiago/Documents/university/Inteligencia_Artificial/Tarea_3_TSP")
 import matplotlib
 matplotlib.use("Agg")
-g = {"__name__": "__main__"}
+g = vars(sys.modules["__main__"])     # real __main__, so fork workers can unpickle cell functions
 for name in sys.argv[1:]:
     text = (HERE / name).read_text()
     if name.endswith("_scratch.py"):
