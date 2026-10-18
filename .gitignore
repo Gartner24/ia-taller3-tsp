@@ -1,0 +1,4 @@
+.venv/
+.ipynb_checkpoints/
+__pycache__/
+build/all_code.py
