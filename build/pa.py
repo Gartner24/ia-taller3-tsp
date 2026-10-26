@@ -1,7 +1,7 @@
 #%% md
-**Integrantes:** Santiago Valencia León (código 1032797866) y Juan Manuel Galvis.
+**Integrantes:** Santiago Valencia León (C.C. 1032797866) y Juan Manuel Galvis (C.C. 1004520611).
 
-**Cómo está organizado nuestro desarrollo.** Dejamos intacto el enunciado (secciones 1 a 17) y desarrollamos todo aquí, en los apartados A a H. Cada apartado empieza con la idea en palabras simples, luego el código y al final lo que encontramos. El código va en inglés y las explicaciones en español.
+**Cómo organizamos el desarrollo.** Dejamos el enunciado intacto (secciones 1 a 17) y desarrollamos todo en los apartados A a H. Cada apartado empieza con la idea en palabras simples, sigue con el código y termina con lo que encontramos. El código está en inglés y las explicaciones en español.
 
 | Apartado | Qué hay | Secciones del enunciado |
 |---|---|---|
@@ -22,6 +22,10 @@ import multiprocessing as mp
 import os
 import platform
 import random
+try:
+    import resource   # Linux/macOS only (process RSS in G.7)
+except ImportError:
+    resource = None
 import statistics
 import sys
 import time
@@ -35,6 +39,11 @@ import numpy as np
 import pandas as pd
 import tsplib95
 from IPython.display import Image, display
+from matplotlib import animation
+
+assert tsplib95.__version__ == "0.7.1", "the notebook was run with tsplib95 0.7.1"
+print(f"Librerías cargadas: numpy {np.__version__}, pandas {pd.__version__}, matplotlib {matplotlib.__version__}, tsplib95 {tsplib95.__version__}")
+#%% code
 
 DATA = Path("data")
 INF = math.inf
@@ -78,12 +87,14 @@ display(pd.Series(env, name="valor").to_frame())
 #%% md
 ### A.1 Presupuestos, medición y contrato de salida
 
-Todas las ejecuciones pasan por las mismas dos piezas:
+Todas las ejecuciones usan las mismas dos piezas.
 
-- **`Meter`** mide tiempo y memoria y corta la ejecución cuando se acaba el presupuesto. El tiempo es `time.perf_counter` y no incluye la carga de datos ni las gráficas. La memoria es la **memoria adicional del solver**: el pico de `tracemalloc` menos lo que ya estaba asignado al empezar. `tracemalloc` solo ve las asignaciones de Python, no la memoria total del proceso; esa la reportamos aparte (al final de G). Se revisa cada 256 expansiones (A*, RBFS) o cada 1024 evaluaciones (HC, SA, GA). Medir con `tracemalloc` hace todo más lento; en G medimos cuánto.
+- **`Meter`** mide tiempo y memoria y corta la ejecución cuando se acaba el presupuesto. El tiempo es `time.perf_counter` y no incluye la carga de datos ni las gráficas. La memoria es la **memoria adicional del solver**: el pico de `tracemalloc` menos lo que ya estaba asignado al empezar. `tracemalloc` solo ve las asignaciones de Python, no la memoria total del proceso; esa la reportamos aparte (al final de G). Las revisiones son así: A* y RBFS comprueban las expansiones y el tiempo en cada expansión, y la memoria cada 256 expansiones. HC, SA y GA comprueban las evaluaciones antes de cada una y el tiempo cada 1024 evaluaciones. Medir con `tracemalloc` hace todo más lento; en G medimos cuánto.
 - **`RunResult`** es el contrato de salida de la sección 4: instancia, algoritmo, parámetros, semilla, ruta o ausencia de ruta, costo, gap, tiempo, memoria, contadores, motivo de parada y estado de optimalidad.
 
-Motivos de parada que usamos: `GOAL` (A*/RBFS cerraron un ciclo), `EXHAUSTED`, `LOCAL_OPTIMUM` (HC), `TMIN` (SA se enfrió), y las interrupciones `TIME`, `EXPANSIONS`, `MEMORY`, `EVALUATIONS`. Estados de optimalidad: `OPTIMAL` (solo A* y RBFS terminados), `NOT_CERTIFIED` (hay ruta pero no prueba) y `NO_TOUR`.
+No usamos ruta de respaldo. Si A* o RBFS se interrumpen, el resultado es `NO_TOUR` y no cuenta como ruta. La ruta inicial compartida de HC y SA es su punto de partida, no una ruta de A* ni de RBFS. La única excepción es la ampliación D.9, donde A* recibe una ruta del vecino más cercano como cota superior: si se corta, devuelve esa ruta marcada como `NOT_CERTIFIED`, identificada como la cota recibida y no como una ruta descubierta por A*.
+
+Motivos de parada: `GOAL` (A* o RBFS cerraron un ciclo), `EXHAUSTED`, `LOCAL_OPTIMUM` (HC), `TMIN` (SA se enfrió), y las interrupciones `TIME`, `EXPANSIONS`, `MEMORY`, `EVALUATIONS`. Estados de optimalidad: `OPTIMAL` (solo A* y RBFS terminados), `NOT_CERTIFIED` (hay ruta pero no prueba) y `NO_TOUR`.
 #%% code
 EXACT_BUDGET = dict(seconds=30.0, expansions=100_000, memory_mib=256.0)
 INTERRUPTIONS = {"TIME", "EXPANSIONS", "MEMORY", "EVALUATIONS"}
@@ -174,3 +185,10 @@ def gap_percent(cost, reference):
     if cost is None or reference is None:
         return None
     return 100.0 * (cost - reference) / reference
+
+
+_chk = Meter(**EXACT_BUDGET)
+_chk_list = list(range(200_000))   # about 7.6 MiB of Python ints, so the meter has something to see
+_chk_seconds, _chk_mib = _chk.finish()
+del _chk_list
+print(f"Meter (lista de 200 000 enteros): tiempo={_chk_seconds:.4f} s, memoria={_chk_mib:.1f} MiB;gap_percent(7600, 7542)={gap_percent(7600, 7542):.3f}% con presupuesto {EXACT_BUDGET}")

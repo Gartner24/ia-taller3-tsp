@@ -67,8 +67,8 @@ def main():
     for c in cells:
         c.pop("id", None)
     nb["cells"] = cells
-    nb["metadata"]["kernelspec"] = {"name": "ia-tarea3", "display_name": "IA Tarea 3 TSP (.venv)",
-                                    "language": "python"}
+    # generic kernel so it opens on any machine (Windows, Colab) without our local kernel
+    nb["metadata"]["kernelspec"] = {"name": "python3", "display_name": "Python 3 (ipykernel)", "language": "python"}
     nb["nbformat"], nb["nbformat_minor"] = 4, 4
     OUT.write_text(json.dumps(nb, ensure_ascii=False, indent=1))
     sources = ["".join(c["source"]) for c in cells if c["cell_type"] == "code"]

@@ -3,9 +3,9 @@
 
 `parent1 = [B,C,D,E,F,G]`, `parent2 = [E,B,G,C,F,D]`, segmento de posiciones 2 a 4 contando desde 1.
 
-1. **Copiar el segmento de parent1** en las mismas posiciones: posiciones 2, 3 y 4 reciben C, D, E. Hijo: `[_, C, D, E, _, _]`.
-2. **Posiciones vacías**, recorridas circularmente desde la siguiente al segmento (la 5): **5, 6, 1**.
-3. **Orden de lectura de parent2**, circular desde la posición 5: F (pos. 5), D (6), E (1), B (2), G (3), C (4).
+1. **Copiar el segmento de parent1** en las mismas posiciones: las posiciones 2, 3 y 4 reciben C, D, E. Hijo: `[_, C, D, E, _, _]`.
+2. **Posiciones vacías**, recorridas en círculo desde la siguiente al segmento (la 5): **5, 6, 1**.
+3. **Orden de lectura de parent2**, en círculo desde la posición 5: F (pos. 5), D (6), E (1), B (2), G (3), C (4).
 4. **Ciudades omitidas** porque ya están en el hijo: D, E y C.
 5. **Se rellenan** en orden las que quedan, F, B y G, en las posiciones 5, 6 y 1.
 
@@ -76,13 +76,16 @@ Decisiones:
 
 - **Cromosoma:** las $n-1$ ciudades sin el origen. Para evaluar se antepone el origen y `tour_cost` cierra el ciclo.
 - **Población inicial:** permutaciones aleatorias del generador del GA (no se usa la ruta inicial compartida de HC y SA, ni ninguna ruta `.opt.tour`).
-- **Selección:** torneo de 3 sin reemplazo; en empate gana el primero muestreado.
-- **Cruce:** con probabilidad $p_c$, `OX(p1, p2)` y `OX(p2, p1)` con los **mismos** cortes; si no, copias de los padres.
-- **Mutación:** con probabilidad $p_m$ **por individuo**, inversión de un tramo al azar. Es lo mismo que un 2-opt aplicado sin mirar el costo: el GA lo usa para diversificar, no para mejorar.
-- **Elitismo:** las `elite` mejores pasan copiadas con su costo guardado, sin reevaluarse.
-- **Duplicados:** se permiten y se miden (no los eliminamos).
+- **Selección:** torneo de 3 sin reemplazo. En un empate gana el primero muestreado.
+- **Cruce:** con probabilidad $p_c$, `OX(p1, p2)` y `OX(p2, p1)` con los **mismos** cortes. Si no, copias de los padres.
+- **Mutación:** con probabilidad $p_m$ **por individuo**, inversión de un tramo al azar. Es un 2-opt aplicado sin mirar el costo: el GA lo usa para diversificar, no para mejorar. Los dos cortes se sortean por separado y se ordenan. Si salen iguales, el tramo tiene una sola ciudad y la inversión no cambia nada (identidad). Con $m = n-1$ ciudades en el cromosoma, eso ocurre con probabilidad $1/m$. No lo evitamos: es parte del operador, y el OX con cortes iguales copia una sola ciudad.
+- **Elitismo:** las `elite` mejores pasan copiadas, con su costo guardado y sin reevaluarse.
+- **Empates:** al ordenar por costo para elegir las élites, el orden es estable, así que un empate favorece al individuo que aparece primero en la población. El mejor global solo se reemplaza si el costo es **estrictamente** menor, así que un empate conserva al anterior.
+- **Duplicados:** se permiten y se miden. No los eliminamos.
+- **Caché:** no usamos caché de evaluaciones, así que no hay consultas ni aciertos que registrar (sección 14.1).
 - **Presupuesto:** la población inicial cuenta $N$ evaluaciones y cada generación $N - \text{elite}$. Una generación solo empieza si cabe completa (14.1).
-- **Diversidad por generación:** fracción de individuos **únicos**, contando una ruta y su reversa como la misma: forma canónica `min(c, c[::-1])` del cromosoma; como el origen está fijo, no hace falta rotar. Y **aristas distintas** en toda la población dividido por $n$: vale 1 si todos son iguales. La forma canónica solo se usa para contar; la evaluación usa el cromosoma tal cual.
+- **Tiempo:** el registro de diversidad de cada generación recorre toda la población y no forma parte del algoritmo. Su tiempo se mide aparte (`extra["log_seconds"]`) y se descuenta del tiempo reportado y del límite de tiempo.
+- **Diversidad por generación:** la fracción de individuos **únicos**, contando una ruta y su reversa como la misma (forma canónica `min(c, c[::-1])` del cromosoma; como el origen está fijo, no hace falta rotar), y las **aristas distintas** de toda la población divididas por $n$, que valen 1 si todos los individuos son iguales. La forma canónica solo sirve para contar; la evaluación usa el cromosoma tal cual.
 #%% code
 def genetic_algorithm(inst, budget, rng, pop_size, elite, pc, pm, tsize=3):
     W, n = inst.W, inst.n
@@ -93,18 +96,23 @@ def genetic_algorithm(inst, budget, rng, pop_size, elite, pc, pm, tsize=3):
     evals = pop_size
     best_k = min(range(pop_size), key=lambda k: costs[k])
     best, best_cost = pop[best_k][:], costs[best_k]
-    history, gen_log = [(evals, meter.elapsed(), best_cost)], []
+    log_time = 0.0                                   # diversity bookkeeping is not part of the algorithm's time
+    clock = lambda: meter.elapsed() - log_time
+    history, gen_log = [(evals, clock(), best_cost)], []
 
     def log(gen):
+        nonlocal log_time
+        t_log = time.perf_counter()
         canon = {min(tuple(c), tuple(c[::-1])) for c in pop}
         edges = {frozenset(e) for c in pop for e in zip([0] + c, c + [0])}
         gen_log.append({"generation": gen, "evals": evals, "best": best_cost, "median": statistics.median(costs),
                         "unique": len(canon) / pop_size, "edge_diversity": len(edges) / n})
+        log_time += time.perf_counter() - t_log
 
     log(0)
     reason, gen = None, 0
     while reason is None:
-        if meter.elapsed() >= budget["seconds"]:
+        if clock() >= budget["seconds"]:
             reason = "TIME"
         elif meter.out_of_evaluations(evals, needed=pop_size - elite):
             reason = meter.reason
@@ -133,34 +141,60 @@ def genetic_algorithm(inst, budget, rng, pop_size, elite, pc, pm, tsize=3):
         k = min(range(pop_size), key=lambda i: costs[i])
         if costs[k] < best_cost:
             best, best_cost = pop[k][:], costs[k]
-            history.append((evals, meter.elapsed(), best_cost))
+            history.append((evals, clock(), best_cost))
         log(gen)
     elapsed, peak = meter.finish()
+    elapsed -= log_time
     tour = [0] + best
     assert is_valid_tour(tour, n) and tour_cost(W, tour) == best_cost
     return RunResult(inst.name, inst.subset, "GA básico", None,
                      dict(pop=pop_size, elite=elite, pc=pc, pm=pm, tournament=tsize, budget=budget["evaluations"]),
                      tour, best_cost, gap_percent(best_cost, inst.optimum), elapsed, peak, reason, "NOT_CERTIFIED",
-                     candidate_evaluations=evals, history=history, extra=dict(generations=gen, gen_log=gen_log))
+                     candidate_evaluations=evals, history=history, extra=dict(generations=gen, gen_log=gen_log, log_seconds=log_time))
+
+
+_chk = genetic_algorithm(INSTANCES["berlin52"].subproblem(10), dict(evaluations=1000, seconds=5.0), random.Random(0), 20, 1, 0.9, 0.2)
+print(f"GA berlin52 k=10: costo={_chk.cost}, generaciones={_chk.extra['generations']}, evaluaciones={_chk.candidate_evaluations}")
 #%% md
-**Pruebas del GA:** el presupuesto nunca se excede y las evaluaciones son exactamente $N + \text{generaciones}\cdot(N-\text{elite})$, lo que confirma que las élites no se reevalúan. Con elitismo, el mejor de cada generación nunca empeora. Después, una corrida de ejemplo en berlin52.
+**Pruebas del GA.** El presupuesto nunca se excede y las evaluaciones son exactamente $N + \text{generaciones}\cdot(N-\text{elite})$. Para comprobar que las élites no se reevalúan, sustituimos `tour_cost` por una versión que cuenta sus llamadas reales. Deben ser las evaluaciones del algoritmo más una, la del chequeo final de la ruta devuelta. Con elitismo, el mejor de cada generación nunca empeora. Después, una corrida de ejemplo en berlin52.
 #%% code
 inst = INSTANCES["berlin52"]
 for pop_size, elite in [(40, 1), (80, 2)]:
-    res = genetic_algorithm(inst, dict(evaluations=10_000, seconds=30), random.Random(5), pop_size, elite, 0.9, 0.3)
+    real_tour_cost, calls = tour_cost, [0]
+
+    def counting_tour_cost(W, tour):
+        calls[0] += 1
+        return real_tour_cost(W, tour)
+
+    tour_cost = counting_tour_cost                    # count the real calls, not the algorithm's own counter
+    try:
+        res = genetic_algorithm(inst, dict(evaluations=10_000, seconds=30), random.Random(5), pop_size, elite, 0.9, 0.3)
+    finally:
+        tour_cost = real_tour_cost
+    assert calls[0] == res.candidate_evaluations + 1      # +1: the final check of the returned tour
     glog = pd.DataFrame(res.extra["gen_log"])
     assert res.candidate_evaluations == pop_size + res.extra["generations"] * (pop_size - elite) <= 10_000
     assert res.candidate_evaluations + (pop_size - elite) > 10_000 and res.stop_reason == "EVALUATIONS"
     assert glog["best"].is_monotonic_decreasing and res.cost == glog["best"].iloc[-1]
-print("GA: presupuesto exacto, élites sin reevaluar, mejor monótono")
+print("GA: presupuesto exacto, llamadas reales a tour_cost = evaluaciones + 1 (élites sin reevaluar), mejor monótono")
 
 demo_ga = genetic_algorithm(inst, dict(evaluations=30_000, seconds=30), random.Random(0), 80, 2, 0.9, 0.3)
 glog = pd.DataFrame(demo_ga.extra["gen_log"])
 display(glog.iloc[::40])
-print(f"costo final {demo_ga.cost} (gap {demo_ga.gap_percent:.1f} %), {demo_ga.extra['generations']} generaciones")
+print(f"costo final {demo_ga.cost} (gap {demo_ga.gap_percent:.1f} %), {demo_ga.extra['generations']} generaciones, "
+      f"tiempo {demo_ga.elapsed_seconds:.2f} s sin la bitácora de diversidad ({demo_ga.extra['log_seconds']:.2f} s aparte)")
+print("aristas distintas por ciudad: inicio", round(glog["edge_diversity"].iloc[0], 2), "final", round(glog["edge_diversity"].iloc[-1], 2),
+      "| únicos:", glog["unique"].iloc[[0, 40, 80, 120, 200, -1]].round(2).tolist(), "| mínimo de aristas",
+      round(glog["edge_diversity"].min(), 2))
+print("aristas distintas: tramos donde sube de una generación a la siguiente:",
+      int((glog["edge_diversity"].diff() > 0).sum()), "de", len(glog) - 1)
+print("mediana contra mejor, cada 80 generaciones:",
+      list(zip(glog["generation"].iloc[::80], glog["median"].iloc[::80], glog["best"].iloc[::80])))
 #%% md
 **Lo que encontramos (F):**
 
-- OX e inversión siempre devuelven permutaciones válidas, también con cortes en los extremos; el cruce de un punto convencional, en cambio, repite y omite ciudades.
-- En la corrida de ejemplo las dos medidas de diversidad cuentan cosas distintas. Las **aristas distintas** bajan sin parar: de unas 24 por ciudad al inicio a menos de 2 al final, o sea, casi toda la población usa las mismas aristas. La fracción de **únicos** sigue cerca de 1 hasta la generación 100 y después oscila entre 0.3 y 0.8: los individuos siguen siendo "distintos", pero solo por unas pocas inversiones de la misma ruta. Al mismo tiempo la mediana de la población se pega al mejor. Esas son señales de convergencia: el cruce ya casi no tiene material nuevo que combinar.
-- Con 30 000 evaluaciones terminó en 8004 (gap 6.1 %). Es una sola semilla y sin calibrar; en G calibramos y medimos 10 semillas (pregunta 8).
+- OX e inversión siempre devuelven permutaciones válidas, también con cortes en los extremos. El cruce de un punto convencional repite y omite ciudades.
+- Las llamadas reales a `tour_cost` fueron las evaluaciones más una, así que las élites no se reevalúan.
+- En la corrida de ejemplo (una semilla, sin calibrar) las dos medidas de diversidad cuentan cosas distintas. Las **aristas distintas** por ciudad bajan de 24.2 al inicio a 2.2 al final, pero con repuntes: en 180 de 383 generaciones subieron respecto de la anterior, por ejemplo 6.0 en la generación 280. La fracción de **únicos** es casi 1 hasta la generación 80 (0.98), cae a 0.75 en la 120 y después oscila entre 0.3 y 0.8. La mediana de la población se acerca al mejor, también con altibajos: en la generación 280 la mediana era 10 097 contra un mejor de 8459, y en la 320, 8253 contra 8252. Leemos esto como convergencia parcial, pero no medimos la causa.
+- Con 30 000 evaluaciones terminó en 8004 (gap 6.1 %). En G calibramos y medimos 10 semillas (pregunta 8).
+- El tiempo reportado excluye la bitácora de diversidad. En esta corrida la bitácora tomó 0.72 s y el algoritmo 0.73 s, así que contarla habría duplicado el tiempo.
